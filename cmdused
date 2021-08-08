@@ -1,0 +1,170 @@
+#!/bin/bash
+sudo apt-get update
+sudo apt-get install openjdk-8-jdk -y
+wget -q -O - https://pkg.jenkins.io/debian-stable/jenkins.io.key | sudo apt-key add -
+sudo sh -c 'echo deb https://pkg.jenkins.io/debian-stable binary/ > \
+    /etc/apt/sources.list.d/jenkins.list'
+sudo apt-get update
+sudo apt-get install jenkins -y
+sudo service jenkins enable
+===============================================================
+ON MASTER:
+#!/bin/bash
+sudo apt-get update 
+sudo apt-get install wget 
+wget https://apt.puppetlabs.com/puppet-release-bionic.deb
+sudo dpkg -i puppet-release-bionic.deb                    
+sudo apt-get update 
+sudo apt-get install puppet-master -y
+
+
+ON SLAVE:
+#!/bin/bash
+sudo apt-get update
+sudo apt-get install wget 
+wget https://apt.puppetlabs.com/puppet-release-bionic.deb 
+sudo dpkg -i puppet-release-bionic.deb 
+sudo apt-get update
+sudo apt-get install puppet -y
+---------------------------
+sudo nano /etc/hosts
+ip- puppet master
+ip-slaves
+------
+sudo nano /etc/default/puppet-master
+JAVA_ARGS="-Xms1g Xmx1g" // add this line
+sudo systemctl restart puppet-master
+sudo ufw allow 8140/tcp
+sudo nano /etc/hosts
+# ip address of master both on master and slaves
+sudo systemctl restart puppet-master
+****ON SLAVE****
+sudo systemctl start puppet &&
+sudo systemctl enable puppet
+puppet agent --test
+*****ON MASTER******
+sudo puppet cert list 
+sudo puppet cert sign --all
+----------------
+sudo mkdir -p /etc/puppet/code/environments/production/manifests
+node default{
+exec{'Conditions':
+command => '/bin/echo "Apache is installed" > /home/ubuntu/config-management/status.txt ',
+onlyif => '/bin/which apache2',
+}
+exec{'conditions':
+command => '/bin/echo "Apache is not installed " > /home/ubuntu/config-management/status.txt ',
+unless => '/bin/which apache2',
+}
+}
+=====================================================
+************NAGIOS************
+
+****ON MASTER*****
+
+sudo apt-get update &&
+sudo apt-get install wget build-essential unzip openssl libssl-dev -y &&
+sudo apt-get install apache2 php libapache2-mod-php php-gd libgd-dev -y &&
+sudo adduser nagios 
+
+sudo groupadd nagcmd  
+sudo usermod -a -G nagcmd nagios  
+sudo usermod -a -G nagcmd www-data 
+cd /tmp &&
+wget -O nagioscore.tar.gz https://github.com/NagiosEnterprises/nagioscore/archive/nagios-4.4.5.tar.gz  &&
+tar xzf nagioscore.tar.gz  &&
+cd /tmp/nagioscore-nagios-4.4.5/ &&
+sudo ./configure --with-httpd-conf=/etc/apache2/sites-enabled &&
+sudo make all &&
+sudo make install &&
+sudo  make install-init &&
+sudo make install-commandmode &&
+sudo make install-config &&
+sudo make install-webconf &&
+sudo a2enmod rewrite &&
+sudo a2enmod cgi &&
+sudo ufw allow Apache &&
+sudo ufw reload 
+
+sudo htpasswd -c /usr/local/nagios/etc/htpasswd.users nagiosadmin
+sudo service apache2 restart &&
+sudo systemctl start nagios.service
+
+**started nagios**
+
+******NRPE PLUGINS***********
+wget http://www.nagios-plugins.org/download/nagios-plugins-2.2.1.tar.gz &&
+tar xzf nagios-plugins-2.2.1.tar.gz &&
+cd nagios-plugins-2.2.1&&
+sudo ./configure --with-nagios-user=nagios --with-openssl &&
+sudo make &&
+sudo make install &&
+cd 
+sudo nano /usr/local/nagios/etc/nagios.cfg
+sudo mkdir sudo nano /usr/local/nagios/etc/servers
+sudo /usr/local/nagios/bin/nagios -v /usr/local/nagios/etc/nagios.cfg
+sudo service nagios start &&
+sudo systemctl enable nagios
+
+
+ON SLAVE'
+sudo apt-get update &&
+sudo apt-get install nagios-nrpe-server nagios-plugins -y &&
+sudo nano /etc/nagios/nrpe.cfg
+sudo /etc/init.d/nagios-nrpe-server restart
+
+AGAIN ON MASTER
+***for adding hosts*********
+cd /usr/local/nagios/etc/objects
+ls
+sudo nano localhost.cfg
+sudo nano host1.cfg
+cd ..
+ls
+sudo nano nagios.cfg
+cd objects/
+sudo systemctl restart nagios
+
+**********ON MASTER***********
+cd
+cd /usr/local/nagios/etc/objects
+ls
+sudo nano production.cfg
+sudo nano localhost.cfg
+/*copy the host configurations */
+sudo nano production.cfg
+
+  define host {
+
+    use                     linux-server
+    host_name               production
+    alias                   nagios-host
+    address                 3.22.221.203
+}
+cd ..
+ls
+sudo nano nagios.cfg
+/* add under definition for monintoring local hosts*/
+cfg_file=/usr/local/nagios/etc/objects/production.cfg     /*paste this line*/
+
+sudo systemctl restart nagios
+
+
+
+Adding service
+cd /usr/local/nagios/etc/objects
+ls
+sudo nano templates.cfg
+sudo nano host1.cfg
+sudo systemctl restart nagios
+
+  define service {
+
+    name                            Http-service
+    use                             generic-service
+    host_name                       production
+    service_description             HTTP
+    check_command                   check_http
+    check_interval                  1
+                    
+}
